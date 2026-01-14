@@ -1,0 +1,62 @@
+
+pipeline {
+    agent any
+    stages {
+        stage('Get Code') {
+            steps{
+                //Obtener codigo
+                git 'https://github.com/josegcort/devops.git'
+                echo WORKSPACE
+            }
+        }
+
+        stage('Build') {
+            steps{
+                //Compilar codigo
+                echo 'Eyy, esto es Python no hay que compilar nada...'
+                echo WORKSPACE
+                bat 'dir'
+            }
+        }
+
+        stage('Tests'){
+            parallel{
+                stage('Unit') {
+                    steps{
+                        //Test codigo aprobando como inestable si algun test falla
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            bat '''
+                                set PYTHONPATH=%WORKSPACE%
+                                pytest --junitxml=reports/result-unit.xml test\\unit
+                            '''
+                        }
+                    }
+                }
+
+                stage('Service') {
+                    steps{
+                        //Test del servicio con Flask con Wiremock
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            bat '''
+                                set FLASK_APP=app/api.py
+                                start flask run
+                                start java -jar D:\\dev\\wiremock\\wiremock-jre8-standalone-2.35.2.jar --port 9090 -v --root-dir test\\wiremock
+                                set PYTHONPATH=%WORKSPACE%
+                                                        
+                                ping -n 10 127.0.0.1
+                                
+                                pytest --junitxml=reports/result-rest.xml test\\rest
+                            '''
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Results') {
+            steps{
+               junit 'reports/result*.xml'
+            }
+        }
+    }
+}
