@@ -21,7 +21,7 @@ pipeline {
 
         stage('Tests'){
             parallel{
-                stage('Unit') {
+                stage('Unit Tests') {
                     steps{
                         //Test codigo aprobando como inestable si algun test falla
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
@@ -33,7 +33,7 @@ pipeline {
                     }
                 }
 
-                stage('Service') {
+                stage('REST Tests') {
                     steps{
                         //Test del servicio con Flask con Wiremock
                         catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
