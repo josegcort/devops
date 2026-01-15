@@ -1,6 +1,8 @@
 
 pipeline {
     agent any
+    //Evita checkout a git automatico
+    options { skipDefaultCheckout() }
     stages {
         stage('Get Code') {
             agent {label 'main'}
