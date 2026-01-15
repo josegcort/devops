@@ -1,0 +1,98 @@
+
+pipeline {
+    agent any
+    stages {
+        stage('Get Code') {
+            agent {label 'main'}
+            steps{
+                //Obtener codigo
+                git 'https://github.com/josegcort/devops.git'
+                echo WORKSPACE
+                bat 'dir'
+                //Almacena temporalmente el codigo
+                stash name:'code', includes:'**'
+            }
+        }
+
+        stage('Build') {
+            agent {label 'main'}
+            steps{
+                //Compilar codigo
+                echo 'Eyy, esto es Python no hay que compilar nada...'
+                echo WORKSPACE
+                bat 'dir'
+            }
+        }
+
+        stage('Tests'){
+            parallel{
+                stage('Unit Tests') {
+                    agent {label 'agente-linux-1'}
+                    steps{
+                        //Test codigo aprobando como inestable si algun test falla
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            
+                            //Recupera el codig
+                            unstash name:'code'
+
+                            sh '''
+                                ls -la
+                                hostname
+
+                                export PYTHONPATH=${WORKSPACE}
+
+                                /home/linux/.local/bin/pytest --junitxml=reports/result-unit.xml test/unit
+                            '''
+
+                            //Almacena temporalmente el resultado de los tests
+                            stash name:'unit-test', includes:'reports/**'
+                        }
+                    }
+                }
+
+                stage('REST Tests') {
+                    agent {label 'agente-linux-2'}
+                    steps{
+                        //Test del servicio con Flask con Wiremock
+                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
+                            
+                            //Recupera el codigo
+                            unstash name:'code'
+
+                            sh '''
+                                ls -la
+                                hostname
+
+                                export FLASK_APP=app/api.py
+                                
+                                /home/linux/.local/bin/flask run &
+
+                                sleep 4
+
+                                java -jar /home/linux/devops/wiremock-jre8-standalone-2.35.2.jar --port 9090 -v --root-dir test/wiremock &
+
+                                export PYTHONPATH=${WORKSPACE}
+                                                        
+                                sleep 15
+                                
+                                /home/linux/.local/bin/pytest --junitxml=reports/result-rest.xml test/rest
+                            '''
+                            //Almacena temporalmente el resultado de los tests
+                            stash name:'rest-test', includes:'reports/**'
+                        }
+                    }
+                }
+            }
+        }
+
+        stage('Results') {
+            steps {
+                //Recupera los resultados de los tests
+                unstash name:'unit-test'
+                unstash name:'rest-test'
+
+                junit 'reports/*.xml'
+            }
+        }
+    }
+}
