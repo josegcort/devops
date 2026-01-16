@@ -28,7 +28,8 @@ pipeline {
 
         stage('Tests'){
             parallel{
-                stage('Unit Tests') {
+                //Pruebas unitarias
+                stage('Unit') {
                     agent {label 'agente-linux-1'}
                     steps{
                         //Test codigo aprobando como inestable si algun test falla
@@ -51,8 +52,8 @@ pipeline {
                         }
                     }
                 }
-
-                stage('REST Tests') {
+                //Pruebas del servicio REST
+                stage('Rest') {
                     agent {label 'agente-linux-2'}
                     steps{
                         //Test del servicio con Flask con Wiremock
