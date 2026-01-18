@@ -1,9 +1,13 @@
 pipeline {
     agent any
+    //Evita checkout a git automatico
+    options { skipDefaultCheckout() }
+
     stages {
+        //Obtener codigo
         stage('Get Code') {
             steps{
-                //Obtener codigo
+                
                 git 'https://github.com/josegcort/devops.git'
                 echo WORKSPACE
             }
