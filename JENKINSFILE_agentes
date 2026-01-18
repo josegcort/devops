@@ -8,7 +8,8 @@ pipeline {
             agent {label 'main'}
             steps{
                 //Obtener codigo
-                git 'https://github.com/josegcort/devops.git'
+                git branch: 'develop',
+                url: 'https://github.com/josegcort/devops.git'
                 echo WORKSPACE
                 bat 'dir'
                 //Almacena temporalmente el codigo
