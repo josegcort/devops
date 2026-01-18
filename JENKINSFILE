@@ -100,26 +100,26 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
 
-                //Test de rendimiento con JMeter
-                stage('JMeter') {
-                    steps{
-                        //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
-                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                            bat '''
-                                if not exist reports mkdir reports
+        //Test de rendimiento con JMeter
+        stage('JMeter') {
+            steps{
+                //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    bat '''
+                        if not exist reports mkdir reports
 
-                                set FLASK_APP=app/api.py
+                        set FLASK_APP=app/api.py
 
-                                start flask run
+                        start flask run
 
-                                ping -n 10 127.0.0.1
+                        ping -n 10 127.0.0.1
 
-                                jmeter -n -t D:\\UNIR\\Practica\\1.2\\JMeter\\plan-jmeter-reto-1.jmx -f -l reports/result-jmeter.jtl
-                            '''
-                            perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
-                        }
-                    }
+                        jmeter -n -t D:\\UNIR\\Practica\\1.2\\JMeter\\plan-jmeter-reto-1.jmx -f -l reports/result-jmeter.jtl
+                    '''
+                    perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
                 }
             }
         }
