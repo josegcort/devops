@@ -121,7 +121,7 @@ pipeline {
 
                         ping -n 10 127.0.0.1
 
-                        jmeter -n -t D:\\UNIR\\Practica\\1.2\\JMeter\\plan-jmeter-reto-1.jmx -f -l reports/result-jmeter.jtl
+                        jmeter -n -t test/jmeter/plan-jmeter-cp-1.2-reto-1.jmx -f -l reports/result-jmeter.jtl
                     '''
                     perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
                 }
