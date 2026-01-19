@@ -264,5 +264,36 @@ pipeline {
             }
         }
 
+        stage('Clean parallel') {
+            parallel {
+                //Limpieza del nodo main
+                stage('Clean main') {
+                    agent {
+                        label 'main'
+                    }
+                    steps {
+                        deleteDir()
+                    }
+                }
+                //Limpieza del nodo linux-1
+                stage('Clean linux-1') {
+                    agent {
+                        label 'agente-linux-1'
+                    }
+                    steps {
+                        deleteDir()
+                    }
+                }
+                //Limpieza del nodo linux-2
+                stage('Clean linux-2') {
+                    agent {
+                        label 'agente-linux-2'
+                    }
+                    steps {
+                        deleteDir()
+                    }
+                }
+            }
+        }
     }
 }
