@@ -165,43 +165,43 @@ pipeline {
                         }
                     }
                 }
-            }
-        }
 
+                //Test de rendimiento con JMeter
+                stage('Performance') {
+                    agent { label 'main' }
+                    steps {
+                        //Recupera el codig
+                        unstash 'code'
 
-        //Test de rendimiento con JMeter
-        stage('Performance') {
-            agent { label 'agente-linux-2' }
-            steps {
-                //Recupera el codig
-                unstash 'code'
+                        //Identificacion del nodo
+                        bat '''
+                            whoami
+                            hostname
+                            echo %WORKSPACE%
+                        '''
 
-                //Identificacion del nodo
-                sh '''
-                    whoami
-                    hostname
-                    echo ${WORKSPACE}
-                '''
+                        //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                           bat '''
+                                if not exist reports mkdir reports
 
-                //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
-                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
-                    sh '''
-                        mkdir -p reports
+                                set FLASK_APP=app/api.py
 
-                        mkdir -p reports
+                                start flask run
 
-                        export FLASK_APP=app/api.py
+                                ping -n 10 127.0.0.1
 
-                        ~/venvs/ci/bin/python -m flask run &
-
-                        sleep 4
-
-                        jmeter -n -t test/jmeter/plan-jmeter-cp-1.2-reto-1.jmx -f -l reports/result-jmeter.jtl
-                    '''
-                    perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
+                                jmeter -n -t test/jmeter/plan-jmeter-cp-1.2-reto-1.jmx -f -l reports/result-jmeter.jtl
+                            '''
+                            perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
+                        }
+                    }
                 }
             }
         }
+
+
+        
 
         stage('Results parallel') {
             parallel {
