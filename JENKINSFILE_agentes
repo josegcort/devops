@@ -5,97 +5,264 @@ pipeline {
     options { skipDefaultCheckout() }
     stages {
         stage('Get Code') {
-            agent {label 'main'}
-            steps{
-                //Obtener codigo
+            agent { label 'main' }
+            steps {
+                //Identificacion del nodo
+                bat '''
+                    whoami
+                    hostname
+                    echo %WORKSPACE%
+                '''
+
+                //Obtener codigo fuente
                 git 'https://github.com/josegcort/devops.git'
-                echo WORKSPACE
-                bat 'dir'
+
                 //Almacena temporalmente el codigo
                 stash name:'code', includes:'**'
             }
         }
 
-        stage('Build') {
-            agent {label 'main'}
-            steps{
-                //Compilar codigo
-                echo 'Eyy, esto es Python no hay que compilar nada...'
-                echo WORKSPACE
-                bat 'dir'
-            }
-        }
-
-        stage('Tests'){
-            parallel{
-                //Pruebas unitarias
+        stage('Tests parallel') {
+            parallel {
+                //Tests unitarios con pytest y generación de coverage
                 stage('Unit') {
-                    agent {label 'agente-linux-1'}
-                    steps{
-                        //Test codigo aprobando como inestable si algun test falla
-                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                            
-                            //Recupera el codig
-                            unstash name:'code'
+                    agent { label 'agente-linux-1' }
+                    steps {
+                        //Recupera el codig
+                        unstash 'code'
 
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //En caso de haber errores los captura, siempre marca el stage como (verde) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
                             sh '''
-                                ls -la
-                                hostname
+                                mkdir -p reports
 
                                 export PYTHONPATH=${WORKSPACE}
 
-                                /home/linux/.local/bin/pytest --junitxml=reports/result-unit.xml test/unit
-                            '''
+                                ~/venvs/ci/bin/python -m coverage run --branch --source=app --omit=app/__init__.py,app/api.py -m pytest --junitxml=reports/result-unit.xml test/unit
 
+                                ~/venvs/ci/bin/python -m coverage xml -o reports/result-coverage-unit.xml
+                            '''
                             //Almacena temporalmente el resultado de los tests
-                            stash name:'unit-test', includes:'reports/**'
+                            stash name:'result-unit', includes:'reports/result-unit.xml'
+                            stash name:'result-coverage', includes:'reports/result-coverage-unit.xml'
                         }
                     }
                 }
-                //Pruebas del servicio REST
-                stage('Rest') {
-                    agent {label 'agente-linux-2'}
-                    steps{
-                        //Test del servicio con Flask con Wiremock
-                        catchError(buildResult: 'UNSTABLE', stageResult: 'FAILURE') {
-                            
-                            //Recupera el codigo
-                            unstash name:'code'
 
+                //Test del servicio REST con Flask con Wiremock
+                stage('Rest') {
+                    agent { label 'agente-linux-2' }
+                    steps {
+                        //Recupera el codig
+                        unstash 'code'
+
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //En caso de haber errores los captura, siempre marca el stage como (verde) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS', stageResult: 'SUCCESS') {
                             sh '''
-                                ls -la
-                                hostname
+                                mkdir -p reports
 
                                 export FLASK_APP=app/api.py
-                                
-                                /home/linux/.local/bin/flask run &
+
+                                ~/venvs/ci/bin/python -m flask run &
 
                                 sleep 4
 
-                                java -jar /home/linux/devops/wiremock-jre8-standalone-2.35.2.jar --port 9090 -v --root-dir test/wiremock &
+                                java -jar /home/zorin/devops/wiremock-jre8-standalone-2.35.2.jar --port 9090 -v --root-dir test/wiremock &
 
                                 export PYTHONPATH=${WORKSPACE}
-                                                        
+
                                 sleep 15
-                                
-                                /home/linux/.local/bin/pytest --junitxml=reports/result-rest.xml test/rest
+
+                                ~/venvs/ci/bin/python -m pytest --junitxml=reports/result-rest.xml test/rest
                             '''
                             //Almacena temporalmente el resultado de los tests
-                            stash name:'rest-test', includes:'reports/**'
+                            stash name:'result-rest', includes:'reports/result-rest.xml'
+                        }
+                    }
+                }
+
+                //Test de analisis de codigo estatico con Flake8
+                stage('Static') {
+                    agent { label 'agente-linux-1' }
+                    steps {
+                        //Recupera el codig
+                        unstash 'code'
+
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //En caso de haber errores los captura, marca el stage (amarillo)/(rojo) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS') {
+                            sh '''
+                                mkdir -p reports
+                                ~/venvs/ci/bin/python -m flake8 --exit-zero --format=pylint app > reports/result-flake8.out
+                            '''
+                            recordIssues(
+                                tools: [
+                                    flake8(name: 'Flake8', pattern: 'reports/result-flake8.out')
+                                ],
+                                qualityGates: [
+                                    // >= 10 issues → FAILED(rojo)
+                                    [threshold: 10, type: 'TOTAL', failed: true],
+                                    // >= 8 issues → UNSTABLE(amarillo)
+                                    [threshold: 8, type: 'TOTAL', unstable: true]
+                                ]
+                            )
+                        }
+                    }
+                }
+
+                //Test de seguridad con Bandit
+                stage('Security Test') {
+                    agent { label 'agente-linux-2' }
+                    steps {
+                        //Recupera el codig
+                        unstash 'code'
+
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //En caso de haber errores los captura, marca el stage (amarillo)/(rojo) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS') {
+                            sh '''
+                                mkdir -p reports
+
+                                ~/venvs/ci/bin/python -m bandit --exit-zero -r . -f custom -o reports/result-bandit.out --msg-template "{abspath}:{line}: [{test_id}] {msg}"
+                            '''
+                            recordIssues(
+                                tools: [
+                                    pyLint(name: 'Bandit', pattern: 'reports/result-bandit.out')
+                                ],
+                                qualityGates: [
+                                    // >= 4 issues → FAILED(rojo)
+                                    [threshold: 4, type: 'TOTAL', failed: true],
+                                    // >= 2 issues → UNSTABLE(amarillo)
+                                    [threshold: 2, type: 'TOTAL', unstable: true]
+                                ]
+                            )
                         }
                     }
                 }
             }
         }
 
-        stage('Results') {
-            steps {
-                //Recupera los resultados de los tests
-                unstash name:'unit-test'
-                unstash name:'rest-test'
 
-                junit 'reports/*.xml'
+        //Test de rendimiento con JMeter
+        stage('Performance') {
+            agent { label 'agente-linux-2' }
+            steps {
+                //Recupera el codig
+                unstash 'code'
+
+                //Identificacion del nodo
+                sh '''
+                    whoami
+                    hostname
+                    echo ${WORKSPACE}
+                '''
+
+                //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
+                catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
+                    sh '''
+                        mkdir -p reports
+
+                        mkdir -p reports
+
+                        export FLASK_APP=app/api.py
+
+                        ~/venvs/ci/bin/python -m flask run &
+
+                        sleep 4
+
+                        jmeter -n -t test/jmeter/plan-jmeter-cp-1.2-reto-1.jmx -f -l reports/result-jmeter.jtl
+                    '''
+                    perfReport sourceDataFiles: 'reports/result-jmeter.jtl'
+                }
             }
         }
+
+        stage('Results parallel') {
+            parallel {
+                // Analisis de las pruebas de coverage
+                stage('Coverage') {
+                    agent { label 'agente-linux-1' }
+                    steps {
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //En caso de haber errores los captura, marca el stage (amarillo)/(rojo) y permite la continuidad del pipeline
+                        catchError(buildResult: 'SUCCESS') {
+                            //Recupera los resultados del tests coverage
+                            unstash 'result-coverage'
+
+                            recordCoverage(
+                                tools: [
+                                    [parser: 'COBERTURA', pattern: 'reports/result-coverage-unit.xml']
+                                ],
+                                qualityGates: [
+                                    // LINE COVERAGE
+                                    // <= 85 issues → ERROR(rojo)
+                                    [threshold: 85, metric: 'LINE', criticality: 'ERROR'],
+                                    // <= 95 issues → NOTE(amarillo)
+                                    [threshold: 95, metric: 'LINE', criticality: 'NOTE'],
+
+                                    // BRANCH COVERAGE
+                                    // <= 80 issues → ERROR(rojo)
+                                    [threshold: 80, metric: 'BRANCH', criticality: 'ERROR'],
+                                    // <= 90 issues → NOTE(amarillo)
+                                    [threshold: 90, metric: 'BRANCH', criticality: 'NOTE']
+                                ]
+                            )
+                        }
+                    }
+                }
+
+                //Resultados tests unitarios y de servicio REST
+                stage('Results Unit/Rest') {
+                    agent { label 'agente-linux-2' }
+                    steps {
+                        //Identificacion del nodo
+                        sh '''
+                            whoami
+                            hostname
+                            echo ${WORKSPACE}
+                        '''
+
+                        //Recupera los resultados de los tests
+                        unstash 'result-unit'
+                        unstash 'result-rest'
+
+                        junit 'reports/result-unit.xml,reports/result-rest.xml'
+                    }
+                }
+            }
+        }
+
     }
 }
