@@ -15,7 +15,8 @@ pipeline {
                 '''
 
                 //Obtener codigo fuente
-                git 'https://github.com/josegcort/devops.git'
+                git branch: 'feature_fix_coverage',
+                url: 'https://github.com/josegcort/devops.git'
 
                 //Almacena temporalmente el codigo
                 stash name:'code', includes:'**'
