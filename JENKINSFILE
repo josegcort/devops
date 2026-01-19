@@ -57,7 +57,7 @@ pipeline {
                 }
 
                 //Test de analisis de codigo estatico con Flake8
-                stage('Flake8') {
+                stage('Static') {
                     steps{
                         //En caso de haber errores los captura, marca el stage (amarillo)/(rojo) y permite la continuidad del pipeline
                         catchError(buildResult: 'SUCCESS') {
@@ -81,7 +81,7 @@ pipeline {
                 }
 
                 //Test de seguridad con Bandit
-                stage('Bandit') {
+                stage('Security Test') {
                     steps{
                         //En caso de haber errores los captura, marca el stage (amarillo)/(rojo) y permite la continuidad del pipeline
                         catchError(buildResult: 'SUCCESS') {
@@ -108,7 +108,7 @@ pipeline {
         }
 
         //Test de rendimiento con JMeter
-        stage('JMeter') {
+        stage('Performance') {
             steps{
                 //En caso de haber errores los captura, marca el stage (amarillo) y permite la continuidad del pipeline
                 catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE') {
